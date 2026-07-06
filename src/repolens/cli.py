@@ -4,6 +4,7 @@ from typing import Annotated
 
 import typer
 
+from repolens.analyzer import AnalysisResult, analyze_repository
 from repolens.errors import RepoLensError
 from repolens.git_source import clone_repository, validate_github_url
 from repolens.scanner import ScanResult, scan_files
@@ -57,7 +58,11 @@ def analyze(
             scan_result = scan_files(repository.local_path)
             _print_scan_summary(scan_result)
 
-            for step_number, stage in enumerate(PIPELINE_STAGES[3:], start=4):
+            typer.echo(f"4. {PIPELINE_STAGES[3]}")
+            analysis_result = analyze_repository(scan_result)
+            _print_analysis_summary(analysis_result)
+
+            for step_number, stage in enumerate(PIPELINE_STAGES[4:], start=5):
                 typer.echo(f"{step_number}. {stage} (placeholder)")
     except RepoLensError as exc:
         typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
@@ -78,3 +83,23 @@ def _print_scan_summary(scan_result: ScanResult) -> None:
     else:
         language_summary = "none"
     typer.echo(f"  Detected language counts: {language_summary}")
+
+
+def _print_analysis_summary(analysis_result: AnalysisResult) -> None:
+    typer.echo("Detected technologies:")
+    if not analysis_result.technologies:
+        typer.echo("  none")
+    for technology in analysis_result.technologies:
+        evidence = ", ".join(technology.evidence_paths)
+        typer.echo(
+            f"  - {technology.name} "
+            f"({technology.category}, {technology.confidence}) "
+            f"[evidence: {evidence}]"
+        )
+
+    typer.echo("Top important files:")
+    if not analysis_result.ranked_files:
+        typer.echo("  none")
+    for index, ranked_file in enumerate(analysis_result.ranked_files[:10], start=1):
+        reasons = "; ".join(ranked_file.reasons)
+        typer.echo(f"  {index}. {ranked_file.path} (score: {ranked_file.score}) - {reasons}")

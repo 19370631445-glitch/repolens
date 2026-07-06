@@ -6,6 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from repolens.analyzer import AnalysisResult, RankedFile, TechnologyFinding
 from repolens.cli import app
 from repolens.git_source import ClonedRepository
 from repolens.scanner import ScanResult, ScannedFile, SkippedFile
@@ -48,8 +49,30 @@ def test_analyze_command_exists(monkeypatch) -> None:
             language_counts={"JavaScript": 1},
         )
 
+    def fake_analyze_repository(scan_result: ScanResult) -> AnalysisResult:
+        assert scan_result.total_files_seen == 3
+        return AnalysisResult(
+            technologies=[
+                TechnologyFinding(
+                    name="JavaScript/Node.js",
+                    category="runtime",
+                    confidence="high",
+                    evidence_paths=["package.json"],
+                    reason="Node.js package manifest is present.",
+                )
+            ],
+            ranked_files=[
+                RankedFile(
+                    path="src/index.js",
+                    score=125,
+                    reasons=["source file under src/ or app/", "common application entry point"],
+                )
+            ],
+        )
+
     monkeypatch.setattr("repolens.cli.clone_repository", fake_clone_repository)
     monkeypatch.setattr("repolens.cli.scan_files", fake_scan_files)
+    monkeypatch.setattr("repolens.cli.analyze_repository", fake_analyze_repository)
 
     result = runner.invoke(
         app,
@@ -67,4 +90,9 @@ def test_analyze_command_exists(monkeypatch) -> None:
     assert "Included files: 1" in result.stdout
     assert "Skipped files: 2" in result.stdout
     assert "Detected language counts: JavaScript: 1" in result.stdout
+    assert "4. Analyze structure" in result.stdout
+    assert "Detected technologies:" in result.stdout
+    assert "JavaScript/Node.js" in result.stdout
+    assert "Top important files:" in result.stdout
+    assert "src/index.js" in result.stdout
     assert "6. Generate PROJECT_MAP.md (placeholder)" in result.stdout

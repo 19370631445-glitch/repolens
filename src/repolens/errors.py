@@ -13,6 +13,10 @@ class InvalidRepositoryUrlError(RepoLensError):
     """Raised when a repository URL is unsupported or invalid."""
 
 
+class GitNotFoundError(RepoLensError):
+    """Raised when the local Git executable is not available."""
+
+
 class RepositoryCloneError(RepoLensError):
     """Raised when a repository cannot be cloned."""
 
@@ -27,4 +31,3 @@ class LLMError(RepoLensError):
 
 class ReportGenerationError(RepoLensError):
     """Raised when PROJECT_MAP.md cannot be generated."""
-

@@ -6,6 +6,7 @@ import typer
 
 from repolens.errors import RepoLensError
 from repolens.git_source import clone_repository, validate_github_url
+from repolens.scanner import ScanResult, scan_files
 
 app = typer.Typer(
     name="repolens",
@@ -52,8 +53,28 @@ def analyze(
             else:
                 typer.echo("Commit: unavailable")
 
-            for step_number, stage in enumerate(PIPELINE_STAGES[2:], start=3):
+            typer.echo(f"3. {PIPELINE_STAGES[2]}")
+            scan_result = scan_files(repository.local_path)
+            _print_scan_summary(scan_result)
+
+            for step_number, stage in enumerate(PIPELINE_STAGES[3:], start=4):
                 typer.echo(f"{step_number}. {stage} (placeholder)")
     except RepoLensError as exc:
         typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
+
+
+def _print_scan_summary(scan_result: ScanResult) -> None:
+    typer.echo("Scan summary:")
+    typer.echo(f"  Total files seen: {scan_result.total_files_seen}")
+    typer.echo(f"  Included files: {scan_result.included_count}")
+    typer.echo(f"  Skipped files: {scan_result.skipped_count}")
+
+    if scan_result.language_counts:
+        language_summary = ", ".join(
+            f"{language}: {count}"
+            for language, count in sorted(scan_result.language_counts.items())
+        )
+    else:
+        language_summary = "none"
+    typer.echo(f"  Detected language counts: {language_summary}")

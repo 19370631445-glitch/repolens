@@ -1,100 +1,106 @@
 # RepoLens
 
-Understand unfamiliar GitHub repositories in minutes with an AI-assisted PROJECT_MAP.md.
+Understand unfamiliar GitHub repositories in minutes with an AI-assisted `PROJECT_MAP.md`.
 
-RepoLens is an open-source, CLI-first repository understanding tool. Give it a public GitHub repository URL and it builds a local, traceable `PROJECT_MAP.md` using safe static analysis, lightweight relationship extraction, bounded context building, and the current Mock LLM summarization pipeline.
+RepoLens is a CLI-first, open-source repository understanding tool for developers who need to quickly orient themselves inside a new, inherited, or open-source codebase. Give RepoLens a public GitHub repository URL, and it produces a traceable Markdown map with project overview, technology evidence, important files, lightweight relationships, inferred data flow, and known limitations.
+
+> v0.1 is intentionally small: safe local analysis first, no hosting required, and Mock LLM as the default provider.
+
+## Why RepoLens?
+
+Reading an unfamiliar repository often starts with the same questions:
+
+- What does this project do?
+- Which files should I read first?
+- What technologies and frameworks does it use?
+- How do the main modules appear to relate?
+- What are the limits of this automated analysis?
+
+RepoLens turns those first-pass questions into a local `PROJECT_MAP.md` that you can read, share, and verify against the source code.
 
 ## Current Status
 
 - v0.1 local pipeline works end-to-end for public GitHub repositories.
-- Mock LLM is still the default provider, so no API key or real LLM network call is required for safe local testing.
+- Mock LLM is the default provider, so no API key or real LLM network call is required for safe local testing.
 - OpenAI provider support is available behind `--provider openai`.
+- JavaScript/TypeScript and Python receive the most targeted heuristics. Other languages receive generic directory/file-level analysis.
 
-## Quick Start
+## Features
 
-### Install
+- Python 3.11+ CLI: `repolens analyze <github-url>`
+- Public GitHub HTTPS URL validation
+- Shallow clone with `git clone --depth 1`
+- Safe repository scanning with skip rules for dependencies, build output, binaries, secrets, and symlinks
+- Deterministic technology detection from manifests and config files
+- Explainable important-file ranking
+- Lightweight Python and JavaScript/TypeScript relationship extraction
+- Bounded context building with untrusted repository content delimiters
+- Mock LLM summaries by default
+- Optional OpenAI provider
+- Markdown report generation to `PROJECT_MAP.md`
 
-Create and activate a virtual environment:
+## Quick Start: Mock Provider
+
+Install RepoLens locally:
 
 ```bash
 python -m venv .venv
+python -m pip install -e ".[dev]"
 ```
 
-On Windows PowerShell:
+On Windows PowerShell, activate the virtual environment first:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-On macOS or Linux:
-
-```bash
-source .venv/bin/activate
-```
-
-Install RepoLens with development dependencies:
-
-```bash
-python -m pip install -e ".[dev]"
-```
-
-To use the OpenAI provider, install the optional OpenAI dependency too:
-
-```bash
-python -m pip install -e ".[dev,openai]"
-```
-
-### Run
-
-Analyze a public GitHub repository:
+Analyze a public GitHub repository with the default Mock provider:
 
 ```bash
 repolens analyze https://github.com/owner/repo
 ```
 
-Optionally choose the report path:
+Write to a custom output path:
 
 ```bash
 repolens analyze https://github.com/owner/repo --output PROJECT_MAP.md
 ```
 
-### Output
-
-RepoLens writes a Markdown report:
+Output:
 
 ```text
 PROJECT_MAP.md
 ```
 
-## LLM Providers
+## OpenAI Usage
 
-RepoLens defaults to the deterministic Mock provider:
+The Mock provider is best for local development and tests. To generate real LLM summaries, install the optional OpenAI dependency:
 
 ```bash
-repolens analyze https://github.com/owner/repo --provider mock
+python -m pip install -e ".[dev,openai]"
 ```
 
-To use the OpenAI provider, set `OPENAI_API_KEY` first.
+Set `OPENAI_API_KEY`.
 
-On Windows PowerShell:
+Windows PowerShell:
 
 ```powershell
 $env:OPENAI_API_KEY = "your-api-key"
 ```
 
-On macOS or Linux:
+macOS or Linux:
 
 ```bash
 export OPENAI_API_KEY="your-api-key"
 ```
 
-Then run:
+Run with OpenAI:
 
 ```bash
 repolens analyze https://github.com/owner/repo --provider openai
 ```
 
-You can choose a model explicitly:
+Choose a model explicitly:
 
 ```bash
 repolens analyze https://github.com/owner/repo --provider openai --model gpt-4.1-mini
@@ -106,33 +112,56 @@ OpenAI API usage may cost money. Start with a small repository when testing.
 
 See [examples/PROJECT_MAP.example.md](examples/PROJECT_MAP.example.md) for a realistic sample report based on a small mock repository.
 
-## What RepoLens Does
+## What the Report Includes
 
-1. Validates a public GitHub HTTPS repository URL.
-2. Performs a shallow clone into a temporary workspace.
-3. Scans files with safe filters and conservative resource limits.
-4. Detects technologies from manifest and config evidence.
-5. Ranks important files with explainable deterministic rules.
-6. Extracts lightweight Python and JavaScript/TypeScript relationships.
-7. Builds bounded context for summarization.
-8. Uses the selected LLM provider to create structured summaries.
-9. Generates `PROJECT_MAP.md`.
+- Project Overview
+- Repository Metadata
+- Technology Stack
+- Directory / File Inventory
+- Important Files
+- Lightweight Relationships
+- Inferred Data Flow
+- Recommended Reading Order
+- Analysis Scope and Limitations
+- Generated By RepoLens
 
 ## Safety
 
 - RepoLens does not execute target repository code.
 - RepoLens does not import target repository modules.
+- RepoLens does not install target repository dependencies.
 - RepoLens skips common secrets, private keys, `.env` files, binary/media files, generated folders, and dependency folders.
 - Repository content is treated as untrusted data and wrapped with explicit delimiters before summarization.
-- Generated reports include limitations and inference labels.
+- Model output is never used to control the pipeline or execute commands.
 
 ## Limitations
 
 - RepoLens uses lightweight heuristics, not a full AST engine.
 - Relationships are not precise call graphs.
 - Inferred data flow is static inference, not runtime tracing.
-- Mock LLM summaries are deterministic placeholders and should be verified against source code.
-- OpenAI-powered summarization requires `OPENAI_API_KEY` and may produce imperfect summaries.
+- Mock LLM summaries are deterministic placeholders.
+- OpenAI-powered summaries may be incomplete or inaccurate and should be verified against source code.
+- v0.1 focuses on public GitHub repositories, Python, and JavaScript/TypeScript.
+
+## Roadmap
+
+- v0.1: CLI release with safe scanning, deterministic analysis, Mock/OpenAI providers, and `PROJECT_MAP.md`.
+- v0.2: Better analysis quality, richer examples, improved language/framework coverage, and report polish.
+- v1.0: A more mature repository-understanding workflow while preserving safety, traceability, and local-first defaults.
+
+See [ROADMAP.md](ROADMAP.md) for more detail.
+
+## Contributing
+
+Contributions are welcome, especially:
+
+- Better technology detection rules
+- Safer and clearer scanner filters
+- Improved importance-ranking heuristics
+- Higher-quality report wording
+- Small fixture repositories for analysis-quality tests
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## Development
 
@@ -150,9 +179,10 @@ Pytest uses a project-local temp directory:
 
 ## Project Documents
 
-- `PRD.md`
-- `TECH_DESIGN.md`
-- `ROADMAP.md`
+- [PRD.md](PRD.md)
+- [TECH_DESIGN.md](TECH_DESIGN.md)
+- [ROADMAP.md](ROADMAP.md)
+- [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 

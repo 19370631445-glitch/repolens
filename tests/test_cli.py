@@ -10,6 +10,7 @@ from repolens.analyzer import AnalysisResult, RankedFile, Relationship, Technolo
 from repolens.cli import app
 from repolens.context_builder import ContextBuildResult, ContextFile, RepositoryMetadata
 from repolens.git_source import ClonedRepository
+from repolens.llm import FileSummary, LLMUsage, ModuleSummary, ProjectSummary, SummaryResult
 from repolens.scanner import ScanResult, ScannedFile, SkippedFile
 
 runner = CliRunner()
@@ -110,10 +111,43 @@ def test_analyze_command_exists(monkeypatch) -> None:
             limitations=[],
         )
 
+    def fake_summarize_context(context_result: ContextBuildResult) -> SummaryResult:
+        assert context_result.total_context_characters == 1234
+        return SummaryResult(
+            file_summaries=[
+                FileSummary(
+                    path="src/index.js",
+                    purpose="Mock file summary",
+                    key_symbols=[],
+                    notes=[],
+                    evidence_paths=["src/index.js"],
+                )
+            ],
+            module_summaries=[
+                ModuleSummary(
+                    name="src",
+                    paths=["src/index.js"],
+                    responsibility="Mock module summary",
+                )
+            ],
+            project_summary=ProjectSummary(
+                overview="Mock project summary",
+                main_technologies=["JavaScript/Node.js"],
+                important_paths=["src/index.js"],
+                limitations=[],
+                evidence_paths=["src/index.js"],
+            ),
+            usage=LLMUsage(),
+            provider_name="mock",
+            model_name="mock-deterministic-v0",
+            requests_made=3,
+        )
+
     monkeypatch.setattr("repolens.cli.clone_repository", fake_clone_repository)
     monkeypatch.setattr("repolens.cli.scan_files", fake_scan_files)
     monkeypatch.setattr("repolens.cli.analyze_repository", fake_analyze_repository)
     monkeypatch.setattr("repolens.cli.build_context", fake_build_context)
+    monkeypatch.setattr("repolens.cli.summarize_context", fake_summarize_context)
 
     result = runner.invoke(
         app,
@@ -143,4 +177,8 @@ def test_analyze_command_exists(monkeypatch) -> None:
     assert "Context files included: 1" in result.stdout
     assert "Total context characters: 1234" in result.stdout
     assert "Truncated files: 0" in result.stdout
+    assert "5. Summarize with LLM" in result.stdout
+    assert "File summaries generated: 1" in result.stdout
+    assert "Module summaries generated: 1" in result.stdout
+    assert "Project summary generated: yes" in result.stdout
     assert "6. Generate PROJECT_MAP.md (placeholder)" in result.stdout

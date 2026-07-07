@@ -8,6 +8,7 @@ from repolens.analyzer import AnalysisResult, analyze_repository
 from repolens.context_builder import ContextBuildResult, build_context
 from repolens.errors import RepoLensError
 from repolens.git_source import clone_repository, validate_github_url
+from repolens.llm import SummaryResult, summarize_context
 from repolens.scanner import ScanResult, scan_files
 
 app = typer.Typer(
@@ -67,8 +68,11 @@ def analyze(
             context_result = build_context(repository, scan_result, analysis_result)
             _print_context_summary(context_result)
 
-            for step_number, stage in enumerate(PIPELINE_STAGES[4:], start=5):
-                typer.echo(f"{step_number}. {stage} (placeholder)")
+            typer.echo(f"5. {PIPELINE_STAGES[4]}")
+            summary_result = summarize_context(context_result)
+            _print_summary_result(summary_result)
+
+            typer.echo(f"6. {PIPELINE_STAGES[5]} (placeholder)")
     except RepoLensError as exc:
         typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
@@ -125,3 +129,11 @@ def _print_context_summary(context_result: ContextBuildResult) -> None:
     typer.echo(f"  Context files included: {len(context_result.context_files)}")
     typer.echo(f"  Total context characters: {context_result.total_context_characters}")
     typer.echo(f"  Truncated files: {context_result.truncated_files_count}")
+
+
+def _print_summary_result(summary_result: SummaryResult) -> None:
+    typer.echo("Summarization summary:")
+    typer.echo(f"  File summaries generated: {len(summary_result.file_summaries)}")
+    typer.echo(f"  Module summaries generated: {len(summary_result.module_summaries)}")
+    project_generated = "yes" if summary_result.project_summary else "no"
+    typer.echo(f"  Project summary generated: {project_generated}")

@@ -66,7 +66,7 @@ repolens analyze https://github.com/pallets/markupsafe --provider openai --model
 - [ ] Create an annotated tag:
 
 ```bash
-git tag -a v0.1.1 -m "RepoLens v0.1.1"
+git tag -a v0.1.2 -m "RepoLens v0.1.2"
 ```
 
 - [ ] Push commits and tag.

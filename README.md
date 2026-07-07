@@ -128,7 +128,12 @@ RepoLens generates a Markdown reading map. A report starts with guidance like th
 - Inferred: `Dockerfile` may start the app through `src/app.py`.
 ```
 
-See [examples/PROJECT_MAP.example.md](examples/PROJECT_MAP.example.md) for a fuller sample report.
+See the example reports:
+
+- [Mock tiny API example](examples/PROJECT_MAP.example.md)
+- [Real-world MarkupSafe example](examples/PROJECT_MAP.markupsafe.example.md)
+
+Example reports may differ depending on RepoLens version, selected provider, repository commit, and scan limits.
 
 ## OpenAI Usage
 
@@ -211,6 +216,7 @@ OpenAI API usage may cost money. Start with a small repository when testing.
 
 - v0.1: CLI release with safe scanning, deterministic analysis, Mock/OpenAI providers, and `PROJECT_MAP.md`.
 - v0.1.1: First-impression polish, clearer README, better sample output, and stronger safety warnings.
+- v0.1.2: More useful report wording, grouped reading order, clearer inferred data flow, and a real-world example report.
 - v0.2: Better analysis quality, richer examples, improved language/framework coverage, and report polish.
 - v1.0: A more mature repository-understanding workflow while preserving safety, traceability, and local-first defaults.
 

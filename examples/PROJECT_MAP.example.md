@@ -106,7 +106,7 @@ Ranking reasons:
 ## Lightweight Relationships
 
 - `src/app.py` -> `src/routes.py` (imports, confidence: `high`) - Python import statement. Evidence: `from src.routes import router`
-- `Dockerfile` -> `src/app.py` (invokes-likely, confidence: `low`) - Dockerfile command appears to invoke a repository file. Evidence: `CMD python src/app.py`
+- `Dockerfile` -> `src/app.py` (likely invokes, confidence: `low`) - Dockerfile command appears to invoke a repository file. Evidence: `CMD python src/app.py`
 
 ## Inferred Data Flow
 

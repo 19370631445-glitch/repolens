@@ -7,11 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_example_project_map_exists_and_is_linked_from_readme() -> None:
     example_path = ROOT / "examples" / "PROJECT_MAP.example.md"
+    real_world_example_path = ROOT / "examples" / "PROJECT_MAP.markupsafe.example.md"
     readme_path = ROOT / "README.md"
 
     assert example_path.exists()
+    assert real_world_example_path.exists()
 
     example_text = example_path.read_text(encoding="utf-8")
+    real_world_example_text = real_world_example_path.read_text(encoding="utf-8")
     required_sections = [
         "## Project Overview",
         "## How to Read This Report",
@@ -27,9 +30,14 @@ def test_example_project_map_exists_and_is_linked_from_readme() -> None:
     assert "Mock summary" not in example_text
     assert "may imports" not in example_text
     assert "may invokes-likely" not in example_text
+    assert "pallets/markupsafe" in real_world_example_text
+    assert "local paths" not in real_world_example_text.lower()
+    assert "temp" not in real_world_example_text.lower()
 
     readme_text = readme_path.read_text(encoding="utf-8")
     assert "examples/PROJECT_MAP.example.md" in readme_text
+    assert "examples/PROJECT_MAP.markupsafe.example.md" in readme_text
+    assert "Example reports may differ" in readme_text
 
 
 def test_gitignore_ignores_generated_report_but_not_example_report() -> None:
@@ -74,7 +82,7 @@ def test_pyproject_release_metadata_is_reasonable() -> None:
     project = pyproject["project"]
 
     assert project["name"] == "repolens"
-    assert project["version"] == "0.1.1"
+    assert project["version"] == "0.1.2"
     assert project["requires-python"] == ">=3.11"
     assert "typer>=0.12,<1" in project["dependencies"]
     assert "pytest>=8,<9" in project["optional-dependencies"]["dev"]

@@ -50,13 +50,15 @@ class ReportComposer:
         lines = [
             "## Project Overview",
             "",
-            _safe_text(project_summary.overview),
+            _project_overview_text(inputs),
             "",
             "> AI-generated summaries may be inaccurate. Verify important conclusions against the source code.",
         ]
+        if not _is_placeholder_summary(project_summary.overview):
+            lines.extend(["", "Provider summary:", "", _safe_text(project_summary.overview)])
         if project_summary.evidence_paths:
             lines.extend(["", "Evidence paths:"])
-            lines.extend(_bullet(path) for path in sorted(project_summary.evidence_paths))
+            lines.extend(_bullet(path) for path in _project_evidence_paths(inputs))
         return "\n".join(lines)
 
     def _how_to_read(self, inputs: ReportInputs) -> str:
@@ -76,16 +78,29 @@ class ReportComposer:
         return "\n".join(lines)
 
     def _recommended_reading_order(self, inputs: ReportInputs) -> str:
-        lines = ["## Recommended Reading Order", ""]
+        lines = [
+            "## Recommended Reading Order",
+            "",
+            "This order prioritizes project orientation first, then configuration, implementation, and tests/examples.",
+        ]
         if not inputs.analysis_result.ranked_files:
             lines.append("No ranked files were available.")
             return "\n".join(lines)
 
-        for index, ranked_file in enumerate(inputs.analysis_result.ranked_files[:10], start=1):
-            reasons = "; ".join(_safe_text(reason) for reason in ranked_file.reasons)
-            lines.append(
-                f"{index}. `{_safe_inline(ranked_file.path)}` - score {ranked_file.score}. {reasons}"
-            )
+        grouped = _group_reading_order(inputs.analysis_result.ranked_files[:10])
+        for group_name in (
+            "Start here",
+            "Understand configuration",
+            "Explore implementation",
+            "Check tests/examples",
+            "Other useful files",
+        ):
+            files = grouped.get(group_name, [])
+            if not files:
+                continue
+            lines.extend(["", f"### {group_name}"])
+            for ranked_file in files:
+                lines.append(_reading_order_item(ranked_file))
         return "\n".join(lines)
 
     def _repository_metadata(self, inputs: ReportInputs) -> str:
@@ -163,11 +178,20 @@ class ReportComposer:
             score = f", score: {ranked.score}" if ranked else ""
             lines.append(f"### `{_safe_inline(summary.path)}`{score}")
             lines.append("")
-            lines.append(_safe_text(summary.purpose))
+            if not _is_placeholder_summary(summary.purpose):
+                lines.append("Summary:")
+                lines.append(_safe_text(summary.purpose))
+                lines.append("")
+            lines.append("Why it matters:")
+            lines.append(_file_importance_explanation(summary.path, ranked))
             if ranked and ranked.reasons:
                 lines.append("")
                 lines.append("Ranking reasons:")
                 lines.extend(_bullet(reason) for reason in ranked.reasons)
+            if summary.evidence_paths:
+                lines.append("")
+                lines.append("Evidence paths:")
+                lines.extend(_bullet(path) for path in sorted(summary.evidence_paths))
             if summary.key_symbols:
                 lines.append("")
                 lines.append("Key symbols:")
@@ -182,9 +206,10 @@ class ReportComposer:
             return "\n".join(lines)
 
         for relationship in inputs.analysis_result.relationships:
+            relationship_label = _relationship_label(relationship.relationship_type)
             lines.append(
                 f"- `{_safe_inline(relationship.source_path)}` -> `{_safe_inline(relationship.target)}` "
-                f"({_safe_text(relationship.relationship_type)}, "
+                f"({_safe_text(relationship_label)}, "
                 f"confidence: `{_safe_inline(relationship.confidence)}`) - "
                 f"{_safe_text(relationship.reason)} Evidence: `{_safe_inline(relationship.evidence)}`"
             )
@@ -194,7 +219,7 @@ class ReportComposer:
         lines = [
             "## Inferred Data Flow",
             "",
-            "**Inference notice:** This section is inferred from static file relationships and summaries. "
+            "**Inference notice:** This section is a hypothesis from lightweight static analysis. "
             "It is not a runtime trace, precise call graph, or verified execution path.",
             "",
         ]
@@ -215,10 +240,12 @@ class ReportComposer:
         lines = [
             "## Analysis Scope and Limitations",
             "",
-            f"- RepoLens uses lightweight static analysis and {provider_label} in this version.",
+            f"- RepoLens used lightweight static analysis plus {provider_label}.",
             "- Repository code was not executed, imported, built, or tested.",
+            "- Relationships are heuristic edges, not precise call graphs.",
+            "- Inferred data flow is a hypothesis for code reading, not verified runtime behavior.",
             "- Skipped secret-like files, binary files, and other excluded files were not read into report context.",
-            "- AI-generated summaries may be inaccurate and should be verified against source code.",
+            "- OpenAI summaries, when used, may be incomplete or inaccurate and should be verified against source code.",
         ]
         all_limitations = list(inputs.scan_result.limitations) + list(inputs.context_result.limitations)
         if inputs.summary_result.project_summary.limitations:
@@ -308,6 +335,164 @@ def _bullet(value: object) -> str:
     return f"- {_safe_text(value)}"
 
 
+def _project_overview_text(inputs: ReportInputs) -> str:
+    repository = inputs.repository
+    scan = inputs.scan_result
+    ranked_files = inputs.analysis_result.ranked_files
+    technology_names = [finding.name for finding in inputs.analysis_result.technologies[:5]]
+
+    lines = [
+        f"`{_safe_inline(repository.owner)}/{_safe_inline(repository.repo)}` was analyzed as a public GitHub repository with "
+        f"{scan.included_count} files included and {scan.skipped_count} files skipped by safety filters."
+    ]
+    if technology_names:
+        lines.append(f"Detected stack signals: {_safe_text(', '.join(technology_names))}.")
+    if ranked_files:
+        first_file = ranked_files[0]
+        lines.append(
+            f"Start with `{_safe_inline(first_file.path)}` because {_safe_text(_plain_reason(first_file.reasons))}."
+        )
+    lines.append(
+        "Use the evidence paths below and the Technology Stack section to verify each conclusion against source files."
+    )
+    return " ".join(lines)
+
+
+def _project_evidence_paths(inputs: ReportInputs) -> list[str]:
+    paths: list[str] = []
+    included_paths = {file.path for file in inputs.scan_result.included_files}
+    paths.extend(
+        path
+        for path in inputs.summary_result.project_summary.evidence_paths
+        if path in included_paths
+    )
+    for finding in inputs.analysis_result.technologies:
+        paths.extend(finding.evidence_paths)
+    for ranked_file in inputs.analysis_result.ranked_files[:5]:
+        paths.append(ranked_file.path)
+    return sorted(dict.fromkeys(path for path in paths if path))
+
+
+def _is_placeholder_summary(value: str) -> bool:
+    return value.strip().startswith("Mock summary for ")
+
+
+def _group_reading_order(ranked_files) -> dict[str, list]:
+    grouped: dict[str, list] = {
+        "Start here": [],
+        "Understand configuration": [],
+        "Explore implementation": [],
+        "Check tests/examples": [],
+        "Other useful files": [],
+    }
+    seen: set[str] = set()
+
+    for index, ranked_file in enumerate(ranked_files):
+        path = ranked_file.path
+        if path in seen:
+            continue
+        seen.add(path)
+        grouped[_reading_group_for_file(ranked_file, index)].append(ranked_file)
+
+    return grouped
+
+
+def _reading_group_for_file(ranked_file, index: int) -> str:
+    path = ranked_file.path.lower()
+    file_name = Path(path).name
+    reasons = " ".join(ranked_file.reasons).lower()
+
+    if index == 0 or "readme" in file_name or "entry point" in reasons:
+        return "Start here"
+    if (
+        "manifest or configuration" in reasons
+        or file_name in {"pyproject.toml", "package.json", "requirements.txt", "setup.cfg"}
+        or file_name.startswith(("docker-compose", "compose."))
+        or file_name == "dockerfile"
+        or path.startswith(".github/workflows/")
+    ):
+        return "Understand configuration"
+    if path.startswith(("tests/", "test/", "examples/", "example/")) or "test or example" in reasons:
+        return "Check tests/examples"
+    if path.startswith(("src/", "app/")) or "source file" in reasons:
+        return "Explore implementation"
+    return "Other useful files"
+
+
+def _reading_order_item(ranked_file) -> str:
+    return (
+        f"- `{_safe_inline(ranked_file.path)}` - score {ranked_file.score}. "
+        f"{_safe_text(_plain_reason(ranked_file.reasons))}."
+    )
+
+
+def _plain_reason(reasons: list[str]) -> str:
+    if not reasons:
+        return "it was included in the repository analysis"
+    return "; ".join(reason.rstrip(".") for reason in reasons)
+
+
+def _file_importance_explanation(path: str, ranked_file) -> str:
+    lower_path = path.lower()
+    file_name = Path(lower_path).name
+    reasons = " ".join(ranked_file.reasons).lower() if ranked_file else ""
+
+    if "readme" in file_name:
+        return (
+            "This file usually explains the project purpose, setup flow, and usage examples. "
+            "Read it first to confirm what the repository claims to do."
+        )
+    if file_name in {"pyproject.toml", "setup.cfg", "setup.py", "requirements.txt"}:
+        return (
+            "This file defines Python packaging, dependencies, or tool configuration. "
+            "Use it to verify the Technology Stack findings."
+        )
+    if file_name == "package.json":
+        return (
+            "This file defines Node.js dependencies and scripts. "
+            "Use it to understand frontend/backend tooling and common commands."
+        )
+    if file_name == "dockerfile" or file_name.startswith(("docker-compose", "compose.")):
+        return (
+            "This file describes container or service startup assumptions. "
+            "Use it to understand how the project may be packaged or run."
+        )
+    if lower_path.startswith((".github/workflows/",)):
+        return (
+            "This workflow file shows CI automation. "
+            "Use it to understand how the project is tested or released."
+        )
+    if lower_path.startswith(("tests/", "test/")) or "test or example" in reasons:
+        return (
+            "This file likely captures expected behavior. "
+            "Use it after the main implementation files to confirm how the project should work."
+        )
+    if "entry point" in reasons:
+        return (
+            "This is likely an entry point or central module. "
+            "Read it early to see how the project wires major pieces together."
+        )
+    if lower_path.startswith(("src/", "app/")):
+        return (
+            "This is implementation code under a common source directory. "
+            "Read it alongside related relationships to understand the core behavior."
+        )
+    return (
+        "This file ranked highly enough to inspect during onboarding. "
+        "Use the ranking reasons and evidence paths to decide whether it is relevant."
+    )
+
+
+def _relationship_label(relationship_type: str) -> str:
+    labels = {
+        "imports": "imports",
+        "configures": "configures",
+        "references": "references",
+        "invokes-likely": "likely invokes",
+    }
+    return labels.get(relationship_type, relationship_type.replace("-", " "))
+
+
 def _openai_integration_label(summary_result: SummaryResult) -> str:
     if summary_result.provider_name == "openai":
         return "used in this run."
@@ -321,7 +506,7 @@ def _inferred_relationship_sentence(relationship: Relationship) -> str:
     confidence = f"confidence: `{_safe_inline(relationship.confidence)}`"
 
     if relationship_type == "imports":
-        sentence = f"{source} likely imports or references {target}"
+        sentence = f"{source} likely depends on imports from {target}"
     elif relationship_type == "invokes-likely":
         sentence = f"{source} may invoke or start {target}"
     elif relationship_type == "configures":

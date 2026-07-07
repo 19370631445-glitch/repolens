@@ -8,6 +8,19 @@ This project follows a lightweight changelog style for the early v0.x phase.
 
 - Continue improving first-run clarity, report usefulness, and analysis quality.
 
+## v0.1.2 - Planned
+
+Report quality polish for first-30-second usefulness.
+
+### Improved
+
+- Made Project Overview more actionable with deterministic repository signals.
+- Grouped Recommended Reading Order into onboarding-focused sections.
+- Improved Important Files explanations so each file says why it matters.
+- Reworded Inferred Data Flow to avoid implying precise runtime behavior.
+- Made limitations easier to understand.
+- Added a curated real-world MarkupSafe example report.
+
 ## v0.1.1 - Planned
 
 First-impression and trust polish for GitHub visitors.

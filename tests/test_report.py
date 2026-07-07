@@ -31,6 +31,16 @@ def test_report_contains_all_required_sections(tmp_path: Path) -> None:
         assert section in report
 
 
+def test_project_overview_is_actionable_and_hides_mock_placeholder(
+    tmp_path: Path,
+) -> None:
+    report = _render_report(tmp_path)
+
+    assert "`example/demo` was analyzed" in report
+    assert "Start with" in report
+    assert "Mock summary for project_summary" not in report
+
+
 def test_report_makes_reading_order_prominent(tmp_path: Path) -> None:
     report = _render_report(tmp_path)
 
@@ -41,6 +51,9 @@ def test_report_makes_reading_order_prominent(tmp_path: Path) -> None:
         "## Repository Metadata"
     )
     assert "Reading-order preview:" in report
+    assert "### Start here" in report
+    assert "### Understand configuration" in report
+    assert "### Explore implementation" in report
 
 
 def test_report_contains_technology_evidence_paths(tmp_path: Path) -> None:
@@ -64,8 +77,11 @@ def test_report_contains_relationships(tmp_path: Path) -> None:
     assert "src/app.py" in report
     assert "src/utils.py" in report
     assert "imports" in report
-    assert "likely imports or references" in report
+    assert "likely depends on imports from" in report
     assert "may imports" not in report
+    assert "invokes-likely" not in report
+    assert "likely invokes" in report
+    assert "may invoke or start" in report
 
 
 def test_report_contains_limitations_and_disclaimer(tmp_path: Path) -> None:
@@ -77,6 +93,8 @@ def test_report_contains_limitations_and_disclaimer(tmp_path: Path) -> None:
     assert "AI-generated summaries may be inaccurate" in report
     assert "not a runtime trace" in report
     assert "Repository code was not executed" in report
+    assert "Relationships are heuristic edges, not precise call graphs" in report
+    assert "OpenAI summaries, when used" in report
 
 
 def test_report_write_creates_project_map(tmp_path: Path) -> None:
@@ -138,6 +156,7 @@ def _build_inputs(tmp_path: Path) -> ReportInputs:
     (tmp_path / "src" / "app.py").write_text("import src.utils\n", encoding="utf-8")
     (tmp_path / "src" / "utils.py").write_text("VALUE = 1\n", encoding="utf-8")
     (tmp_path / ".env").write_text("SECRET=not-in-report\n", encoding="utf-8")
+    (tmp_path / "Dockerfile").write_text("CMD python src/app.py\n", encoding="utf-8")
 
     repository = RepositoryMetadata(
         owner="example",

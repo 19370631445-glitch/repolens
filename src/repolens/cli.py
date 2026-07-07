@@ -5,6 +5,7 @@ from typing import Annotated
 import typer
 
 from repolens.analyzer import AnalysisResult, analyze_repository
+from repolens.context_builder import ContextBuildResult, build_context
 from repolens.errors import RepoLensError
 from repolens.git_source import clone_repository, validate_github_url
 from repolens.scanner import ScanResult, scan_files
@@ -62,6 +63,10 @@ def analyze(
             analysis_result = analyze_repository(scan_result)
             _print_analysis_summary(analysis_result)
 
+            typer.echo("Build LLM context")
+            context_result = build_context(repository, scan_result, analysis_result)
+            _print_context_summary(context_result)
+
             for step_number, stage in enumerate(PIPELINE_STAGES[4:], start=5):
                 typer.echo(f"{step_number}. {stage} (placeholder)")
     except RepoLensError as exc:
@@ -113,3 +118,10 @@ def _print_analysis_summary(analysis_result: AnalysisResult) -> None:
             f"  {index}. {relationship.source_path} -> {relationship.target} "
             f"({relationship.relationship_type}, {relationship.confidence})"
         )
+
+
+def _print_context_summary(context_result: ContextBuildResult) -> None:
+    typer.echo("Context summary:")
+    typer.echo(f"  Context files included: {len(context_result.context_files)}")
+    typer.echo(f"  Total context characters: {context_result.total_context_characters}")
+    typer.echo(f"  Truncated files: {context_result.truncated_files_count}")

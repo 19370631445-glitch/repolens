@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from repolens.analyzer import AnalysisResult, RankedFile, Relationship, TechnologyFinding
 from repolens.cli import app
+from repolens.context_builder import ContextBuildResult, ContextFile, RepositoryMetadata
 from repolens.git_source import ClonedRepository
 from repolens.scanner import ScanResult, ScannedFile, SkippedFile
 
@@ -80,9 +81,39 @@ def test_analyze_command_exists(monkeypatch) -> None:
             ],
         )
 
+    def fake_build_context(
+        repository_metadata: ClonedRepository,
+        scan_result: ScanResult,
+        analysis_result: AnalysisResult,
+    ) -> ContextBuildResult:
+        assert repository_metadata.owner == "example"
+        assert scan_result.total_files_seen == 3
+        assert len(analysis_result.relationships) == 1
+        context_file = ContextFile(
+            path="src/index.js",
+            language="JavaScript",
+            analysis_mode="source",
+            content="console.log('hello')",
+            truncated=False,
+            character_count=20,
+        )
+        return ContextBuildResult(
+            repository=RepositoryMetadata(
+                owner="example",
+                repo="project",
+                clone_url="https://github.com/example/project.git",
+                commit_sha="abc123",
+            ),
+            batches=[],
+            context_files=[context_file],
+            total_context_characters=1234,
+            limitations=[],
+        )
+
     monkeypatch.setattr("repolens.cli.clone_repository", fake_clone_repository)
     monkeypatch.setattr("repolens.cli.scan_files", fake_scan_files)
     monkeypatch.setattr("repolens.cli.analyze_repository", fake_analyze_repository)
+    monkeypatch.setattr("repolens.cli.build_context", fake_build_context)
 
     result = runner.invoke(
         app,
@@ -108,4 +139,8 @@ def test_analyze_command_exists(monkeypatch) -> None:
     assert "Relationship summary:" in result.stdout
     assert "Total relationships found: 1" in result.stdout
     assert "src/index.js -> src/app.js" in result.stdout
+    assert "Build LLM context" in result.stdout
+    assert "Context files included: 1" in result.stdout
+    assert "Total context characters: 1234" in result.stdout
+    assert "Truncated files: 0" in result.stdout
     assert "6. Generate PROJECT_MAP.md (placeholder)" in result.stdout

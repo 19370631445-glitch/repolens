@@ -6,7 +6,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from repolens.analyzer import AnalysisResult, RankedFile, TechnologyFinding
+from repolens.analyzer import AnalysisResult, RankedFile, Relationship, TechnologyFinding
 from repolens.cli import app
 from repolens.git_source import ClonedRepository
 from repolens.scanner import ScanResult, ScannedFile, SkippedFile
@@ -68,6 +68,16 @@ def test_analyze_command_exists(monkeypatch) -> None:
                     reasons=["source file under src/ or app/", "common application entry point"],
                 )
             ],
+            relationships=[
+                Relationship(
+                    source_path="src/index.js",
+                    target="src/app.js",
+                    relationship_type="imports",
+                    confidence="high",
+                    evidence='import app from "./app"',
+                    reason="JavaScript import pattern.",
+                )
+            ],
         )
 
     monkeypatch.setattr("repolens.cli.clone_repository", fake_clone_repository)
@@ -95,4 +105,7 @@ def test_analyze_command_exists(monkeypatch) -> None:
     assert "JavaScript/Node.js" in result.stdout
     assert "Top important files:" in result.stdout
     assert "src/index.js" in result.stdout
+    assert "Relationship summary:" in result.stdout
+    assert "Total relationships found: 1" in result.stdout
+    assert "src/index.js -> src/app.js" in result.stdout
     assert "6. Generate PROJECT_MAP.md (placeholder)" in result.stdout

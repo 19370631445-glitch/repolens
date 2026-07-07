@@ -1,10 +1,11 @@
-"""Deterministic technology detection and importance ranking.
+"""Deterministic repository analysis.
 
-Milestone 2B intentionally stays lightweight:
+This module intentionally stays lightweight:
 - detect technologies from manifest/config evidence;
 - rank scanned files with explainable path-based rules;
+- extract simple module/config relationships with regex-based heuristics;
 - do not execute repository code;
-- do not build a full AST or extract relationships yet.
+- do not build a full AST or precise call graph.
 """
 
 from __future__ import annotations
@@ -39,20 +40,35 @@ class RankedFile:
 
 
 @dataclass(frozen=True)
+class Relationship:
+    """A lightweight relationship between files or modules."""
+
+    source_path: str
+    target: str
+    relationship_type: str
+    confidence: str
+    evidence: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class AnalysisResult:
-    """Output of deterministic analysis before relationship extraction or LLM use."""
+    """Output of deterministic analysis before LLM use."""
 
     technologies: list[TechnologyFinding]
     ranked_files: list[RankedFile]
+    relationships: list[Relationship] = field(default_factory=list)
 
 
 class RepositoryAnalyzer:
     """Analyze scanned repository metadata deterministically."""
 
     def analyze(self, scan_result: ScanResult) -> AnalysisResult:
+        ranked_files = rank_files(scan_result)
         return AnalysisResult(
             technologies=detect_technologies(scan_result),
-            ranked_files=rank_files(scan_result),
+            ranked_files=ranked_files,
+            relationships=extract_relationships(scan_result, ranked_files),
         )
 
 
@@ -131,6 +147,43 @@ def rank_files(scan_result: ScanResult) -> list[RankedFile]:
     return sorted(ranked_files, key=lambda file: (-file.score, file.path))
 
 
+def extract_relationships(
+    scan_result: ScanResult,
+    ranked_files: list[RankedFile] | None = None,
+) -> list[Relationship]:
+    """Extract lightweight relationships from scanned files and important files."""
+    index = _ScanIndex(scan_result)
+    selected_paths = _selected_relationship_paths(scan_result, ranked_files)
+    relationships: list[Relationship] = []
+
+    for path in selected_paths:
+        lower_path = path.lower()
+        if lower_path.endswith(".py"):
+            relationships.extend(_extract_python_imports(index, path))
+        elif lower_path.endswith((".js", ".jsx", ".ts", ".tsx")):
+            relationships.extend(_extract_javascript_imports(index, path))
+        elif lower_path == "package.json":
+            relationships.extend(_extract_package_json_relationships(index, path))
+        elif lower_path == "pyproject.toml":
+            relationships.extend(_extract_pyproject_relationships(index, path))
+        elif Path(path).name.lower() == "dockerfile":
+            relationships.extend(_extract_dockerfile_relationships(index, path))
+        elif lower_path.startswith(".github/workflows/") and lower_path.endswith(
+            (".yml", ".yaml")
+        ):
+            relationships.extend(_extract_github_actions_relationships(index, path))
+
+    return sorted(
+        _unique_relationships(relationships),
+        key=lambda relationship: (
+            relationship.source_path,
+            relationship.relationship_type,
+            relationship.target,
+            relationship.evidence,
+        ),
+    )
+
+
 class _ScanIndex:
     """Small helper around ScanResult paths and safe manifest reads."""
 
@@ -167,6 +220,435 @@ class _ScanIndex:
             return ""
 
         return data.decode("utf-8", errors="ignore")
+
+
+def _selected_relationship_paths(
+    scan_result: ScanResult,
+    ranked_files: list[RankedFile] | None,
+) -> list[str]:
+    if ranked_files is None:
+        return sorted(file.path for file in scan_result.included_files)
+
+    important_paths = {file.path for file in ranked_files[:100]}
+    config_paths = {
+        file.path
+        for file in scan_result.included_files
+        if _is_relationship_config_file(file.path)
+    }
+    return sorted(important_paths | config_paths)
+
+
+def _is_relationship_config_file(path: str) -> bool:
+    lower_path = path.lower()
+    return (
+        lower_path == "package.json"
+        or lower_path == "pyproject.toml"
+        or Path(path).name.lower() == "dockerfile"
+        or lower_path.startswith(".github/workflows/")
+    )
+
+
+def _extract_python_imports(index: _ScanIndex, source_path: str) -> list[Relationship]:
+    relationships: list[Relationship] = []
+    text = index.read_text(source_path)
+
+    for line in text.splitlines():
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith("#"):
+            continue
+
+        import_match = _PYTHON_IMPORT_RE.match(line)
+        if import_match:
+            imported_modules = [
+                item.strip().split(" as ")[0].strip()
+                for item in import_match.group("modules").split(",")
+            ]
+            for module_name in imported_modules:
+                if not module_name:
+                    continue
+                target, confidence = _resolve_python_module(index, source_path, module_name)
+                relationships.append(
+                    Relationship(
+                        source_path=source_path,
+                        target=target,
+                        relationship_type="imports",
+                        confidence=confidence,
+                        evidence=stripped_line,
+                        reason="Python import statement.",
+                    )
+                )
+            continue
+
+        from_match = _PYTHON_FROM_IMPORT_RE.match(line)
+        if from_match:
+            module_name = from_match.group("module")
+            imported_names = _imported_python_names(from_match.group("names"))
+            target, confidence = _resolve_python_module(
+                index,
+                source_path,
+                module_name,
+                imported_names,
+            )
+            relationships.append(
+                Relationship(
+                    source_path=source_path,
+                    target=target,
+                    relationship_type="imports",
+                    confidence=confidence,
+                    evidence=stripped_line,
+                    reason="Python from-import statement.",
+                )
+            )
+
+    return relationships
+
+
+def _extract_javascript_imports(index: _ScanIndex, source_path: str) -> list[Relationship]:
+    relationships: list[Relationship] = []
+    text = index.read_text(source_path)
+
+    for match in _JS_IMPORT_FROM_RE.finditer(text):
+        specifier = match.group("target")
+        evidence = _compact_evidence(match.group(0))
+        relationships.append(
+            _javascript_relationship(index, source_path, specifier, "imports", "high", evidence)
+        )
+
+    for match in _JS_SIDE_EFFECT_IMPORT_RE.finditer(text):
+        specifier = match.group("target")
+        evidence = _compact_evidence(match.group(0))
+        relationships.append(
+            _javascript_relationship(index, source_path, specifier, "imports", "high", evidence)
+        )
+
+    for match in _JS_REQUIRE_RE.finditer(text):
+        specifier = match.group("target")
+        evidence = _compact_evidence(match.group(0))
+        relationships.append(
+            _javascript_relationship(index, source_path, specifier, "imports", "high", evidence)
+        )
+
+    for match in _JS_DYNAMIC_IMPORT_RE.finditer(text):
+        specifier = match.group("target")
+        evidence = _compact_evidence(match.group(0))
+        relationships.append(
+            _javascript_relationship(index, source_path, specifier, "imports", "low", evidence)
+        )
+
+    return relationships
+
+
+def _javascript_relationship(
+    index: _ScanIndex,
+    source_path: str,
+    specifier: str,
+    relationship_type: str,
+    default_confidence: str,
+    evidence: str,
+) -> Relationship:
+    target, confidence = _resolve_javascript_module(index, source_path, specifier)
+    if default_confidence == "low":
+        confidence = "low"
+    return Relationship(
+        source_path=source_path,
+        target=target,
+        relationship_type=relationship_type,
+        confidence=confidence,
+        evidence=evidence,
+        reason="JavaScript/TypeScript import pattern."
+        if default_confidence != "low"
+        else "Dynamic import is treated as a low-confidence relationship.",
+    )
+
+
+def _extract_package_json_relationships(index: _ScanIndex, source_path: str) -> list[Relationship]:
+    text = index.read_text(source_path)
+    if not text:
+        return []
+
+    try:
+        package_data = json.loads(text)
+    except json.JSONDecodeError:
+        return []
+
+    scripts = package_data.get("scripts", {})
+    if not isinstance(scripts, dict):
+        return []
+
+    relationships: list[Relationship] = []
+    for script_name, command in sorted(scripts.items()):
+        if not isinstance(command, str):
+            continue
+        target_path = _first_repo_path_mentioned(index, command)
+        if target_path is None:
+            continue
+        relationships.append(
+            Relationship(
+                source_path=source_path,
+                target=target_path,
+                relationship_type="invokes-likely",
+                confidence="medium",
+                evidence=f"{script_name}: {command}",
+                reason="package.json script appears to invoke a repository file.",
+            )
+        )
+
+    return relationships
+
+
+def _extract_pyproject_relationships(index: _ScanIndex, source_path: str) -> list[Relationship]:
+    text = index.read_text(source_path)
+    if not text:
+        return []
+
+    relationships: list[Relationship] = []
+    for tool_name, marker in (
+        ("pytest", "[tool.pytest"),
+        ("ruff", "[tool.ruff"),
+        ("mypy", "[tool.mypy"),
+    ):
+        if marker not in text.lower():
+            continue
+        for candidate in _common_config_targets(index, tool_name):
+            relationships.append(
+                Relationship(
+                    source_path=source_path,
+                    target=candidate,
+                    relationship_type="configures",
+                    confidence="medium",
+                    evidence=marker,
+                    reason=f"pyproject.toml contains {tool_name} configuration.",
+                )
+            )
+
+    return relationships
+
+
+def _extract_dockerfile_relationships(index: _ScanIndex, source_path: str) -> list[Relationship]:
+    relationships: list[Relationship] = []
+    text = index.read_text(source_path)
+
+    for line in text.splitlines():
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith("#"):
+            continue
+
+        copy_match = _DOCKER_COPY_RE.match(stripped_line)
+        if copy_match:
+            for raw_target in copy_match.group("sources").split():
+                normalized = raw_target.strip().strip('"').strip("'")
+                if normalized.startswith("--"):
+                    continue
+                target = _normalize_repo_reference(index, normalized)
+                if target is None:
+                    continue
+                relationships.append(
+                    Relationship(
+                        source_path=source_path,
+                        target=target,
+                        relationship_type="references",
+                        confidence="medium",
+                        evidence=stripped_line,
+                        reason="Dockerfile COPY/ADD references a repository path.",
+                    )
+                )
+
+        cmd_match = _DOCKER_CMD_RE.match(stripped_line)
+        if cmd_match:
+            target = _first_repo_path_mentioned(index, cmd_match.group("command"))
+            if target is not None:
+                relationships.append(
+                    Relationship(
+                        source_path=source_path,
+                        target=target,
+                        relationship_type="invokes-likely",
+                        confidence="low",
+                        evidence=stripped_line,
+                        reason="Dockerfile command appears to invoke a repository file.",
+                    )
+                )
+
+    return relationships
+
+
+def _extract_github_actions_relationships(
+    index: _ScanIndex,
+    source_path: str,
+) -> list[Relationship]:
+    relationships: list[Relationship] = []
+    text = index.read_text(source_path)
+
+    for line in text.splitlines():
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith("#"):
+            continue
+
+        target = _first_repo_path_mentioned(index, stripped_line)
+        if target is None:
+            continue
+        relationships.append(
+            Relationship(
+                source_path=source_path,
+                target=target,
+                relationship_type="references",
+                confidence="low",
+                evidence=stripped_line,
+                reason="GitHub Actions workflow line references a repository path.",
+            )
+        )
+
+    return relationships
+
+
+def _resolve_python_module(
+    index: _ScanIndex,
+    source_path: str,
+    module_name: str,
+    imported_names: list[str] | None = None,
+) -> tuple[str, str]:
+    candidates = _python_module_candidates(source_path, module_name, imported_names)
+    for candidate in candidates:
+        if index.has(candidate):
+            return candidate, "high"
+
+    cleaned_module = module_name.lstrip(".") or module_name
+    return cleaned_module, "medium"
+
+
+def _python_module_candidates(
+    source_path: str,
+    module_name: str,
+    imported_names: list[str] | None,
+) -> list[str]:
+    source_dir = Path(source_path).parent
+    module_without_dots = module_name.lstrip(".")
+    leading_dots = len(module_name) - len(module_without_dots)
+    candidates: list[str] = []
+
+    if leading_dots:
+        base_dir = source_dir
+        for _ in range(max(leading_dots - 1, 0)):
+            base_dir = base_dir.parent
+        if module_without_dots:
+            module_path = base_dir / module_without_dots.replace(".", "/")
+            candidates.extend(_python_path_candidates(module_path))
+        if imported_names:
+            for imported_name in imported_names:
+                if imported_name == "*":
+                    continue
+                candidates.extend(_python_path_candidates(base_dir / imported_name))
+        return _dedupe_strings(path.as_posix() for path in candidates)
+
+    module_path = Path(module_name.replace(".", "/"))
+    candidates.extend(_python_path_candidates(module_path))
+    for source_root in ("src", "app"):
+        candidates.extend(_python_path_candidates(Path(source_root) / module_path))
+
+    return _dedupe_strings(path.as_posix() for path in candidates)
+
+
+def _python_path_candidates(module_path: Path) -> list[Path]:
+    return [module_path.with_suffix(".py"), module_path / "__init__.py"]
+
+
+def _imported_python_names(names: str) -> list[str]:
+    cleaned = names.replace("(", "").replace(")", "")
+    return [
+        item.strip().split(" as ")[0].strip()
+        for item in cleaned.split(",")
+        if item.strip()
+    ]
+
+
+def _resolve_javascript_module(
+    index: _ScanIndex,
+    source_path: str,
+    specifier: str,
+) -> tuple[str, str]:
+    if specifier.startswith((".", "/")):
+        candidates = _javascript_path_candidates(source_path, specifier)
+        for candidate in candidates:
+            if index.has(candidate):
+                return candidate, "high"
+        return specifier, "low"
+
+    return specifier, "medium"
+
+
+def _javascript_path_candidates(source_path: str, specifier: str) -> list[str]:
+    source_dir = Path(source_path).parent
+    raw_path = Path(specifier[1:] if specifier.startswith("/") else specifier)
+    base_path = (source_dir / raw_path) if specifier.startswith(".") else raw_path
+    suffixes = ["", ".ts", ".tsx", ".js", ".jsx", ".json"]
+    candidates: list[str] = []
+
+    for suffix in suffixes:
+        candidate = base_path if suffix == "" else Path(f"{base_path.as_posix()}{suffix}")
+        candidates.append(candidate.as_posix())
+
+    for extension in (".ts", ".tsx", ".js", ".jsx", ".json"):
+        candidates.append((base_path / f"index{extension}").as_posix())
+
+    return _dedupe_strings(candidates)
+
+
+def _first_repo_path_mentioned(index: _ScanIndex, text: str) -> str | None:
+    for token in re.findall(r"[\w./@-]+\.\w+|[\w./@-]+/[\w./@-]+", text):
+        normalized = _normalize_repo_reference(index, token)
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def _normalize_repo_reference(index: _ScanIndex, value: str) -> str | None:
+    normalized = value.strip().strip(",;:").strip('"').strip("'")
+    normalized = normalized.removeprefix("./").replace("\\", "/")
+    if normalized in index.paths:
+        return normalized
+
+    if normalized.endswith("/"):
+        normalized = normalized[:-1]
+
+    for path in sorted(index.paths):
+        if path == normalized or path.startswith(f"{normalized}/"):
+            return path
+
+    return None
+
+
+def _common_config_targets(index: _ScanIndex, tool_name: str) -> list[str]:
+    if tool_name == "pytest":
+        return sorted(
+            path
+            for path in index.paths
+            if path.startswith(("tests/", "test/")) or Path(path).name.startswith("test_")
+        )[:5]
+
+    if tool_name in {"ruff", "mypy"}:
+        return sorted(path for path in index.paths if path.endswith(".py"))[:5]
+
+    return []
+
+
+def _unique_relationships(relationships: list[Relationship]) -> list[Relationship]:
+    unique: dict[tuple[str, str, str, str], Relationship] = {}
+    for relationship in relationships:
+        key = (
+            relationship.source_path,
+            relationship.target,
+            relationship.relationship_type,
+            relationship.evidence,
+        )
+        unique.setdefault(key, relationship)
+    return list(unique.values())
+
+
+def _compact_evidence(value: str) -> str:
+    return " ".join(value.split())
+
+
+def _dedupe_strings(values) -> list[str]:
+    return list(dict.fromkeys(str(value) for value in values))
 
 
 def _detect_python(index: _ScanIndex, findings: list[TechnologyFinding]) -> None:
@@ -522,6 +1004,21 @@ def _is_common_entry_point(path: str) -> bool:
         "app/index.ts",
     }
 
+
+_PYTHON_IMPORT_RE = re.compile(r"^\s*import\s+(?P<modules>[A-Za-z_][\w.,\s]*)")
+_PYTHON_FROM_IMPORT_RE = re.compile(
+    r"^\s*from\s+(?P<module>[A-Za-z_.][\w.]*)\s+import\s+(?P<names>.+)"
+)
+
+_JS_IMPORT_FROM_RE = re.compile(
+    r"\bimport\s+(?:type\s+)?(?:[\w*\s{},]+?\s+from\s+)?[\"'](?P<target>[^\"']+)[\"']"
+)
+_JS_SIDE_EFFECT_IMPORT_RE = re.compile(r"\bimport\s+[\"'](?P<target>[^\"']+)[\"']")
+_JS_REQUIRE_RE = re.compile(r"\brequire\(\s*[\"'](?P<target>[^\"']+)[\"']\s*\)")
+_JS_DYNAMIC_IMPORT_RE = re.compile(r"\bimport\(\s*[\"'](?P<target>[^\"']+)[\"']\s*\)")
+
+_DOCKER_COPY_RE = re.compile(r"^(?:COPY|ADD)\s+(?P<sources>.+?)\s+\S+$", re.IGNORECASE)
+_DOCKER_CMD_RE = re.compile(r"^(?:CMD|ENTRYPOINT|RUN)\s+(?P<command>.+)$", re.IGNORECASE)
 
 _HIGH_PRIORITY_MANIFESTS_AND_CONFIGS = {
     "package.json",

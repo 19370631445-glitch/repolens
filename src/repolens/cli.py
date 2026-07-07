@@ -103,3 +103,13 @@ def _print_analysis_summary(analysis_result: AnalysisResult) -> None:
     for index, ranked_file in enumerate(analysis_result.ranked_files[:10], start=1):
         reasons = "; ".join(ranked_file.reasons)
         typer.echo(f"  {index}. {ranked_file.path} (score: {ranked_file.score}) - {reasons}")
+
+    typer.echo("Relationship summary:")
+    typer.echo(f"  Total relationships found: {len(analysis_result.relationships)}")
+    if not analysis_result.relationships:
+        typer.echo("  none")
+    for index, relationship in enumerate(analysis_result.relationships[:10], start=1):
+        typer.echo(
+            f"  {index}. {relationship.source_path} -> {relationship.target} "
+            f"({relationship.relationship_type}, {relationship.confidence})"
+        )

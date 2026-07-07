@@ -1,5 +1,6 @@
 """Command-line interface for RepoLens."""
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -9,6 +10,7 @@ from repolens.context_builder import ContextBuildResult, build_context
 from repolens.errors import RepoLensError
 from repolens.git_source import clone_repository, validate_github_url
 from repolens.llm import SummaryResult, summarize_context
+from repolens.report import write_project_map
 from repolens.scanner import ScanResult, scan_files
 
 app = typer.Typer(
@@ -39,6 +41,14 @@ def analyze(
         str,
         typer.Argument(help="Public GitHub repository URL to analyze."),
     ],
+    output_path: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Path where PROJECT_MAP.md should be written.",
+        ),
+    ] = Path("PROJECT_MAP.md"),
 ) -> None:
     """Run the first RepoLens pipeline stages for a public GitHub repository."""
     try:
@@ -72,7 +82,16 @@ def analyze(
             summary_result = summarize_context(context_result)
             _print_summary_result(summary_result)
 
-            typer.echo(f"6. {PIPELINE_STAGES[5]} (placeholder)")
+            typer.echo(f"6. {PIPELINE_STAGES[5]}")
+            report_path = write_project_map(
+                repository=context_result.repository,
+                scan_result=scan_result,
+                analysis_result=analysis_result,
+                context_result=context_result,
+                summary_result=summary_result,
+                output_path=output_path,
+            )
+            typer.echo(f"PROJECT_MAP.md written to: {report_path}")
     except RepoLensError as exc:
         typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc

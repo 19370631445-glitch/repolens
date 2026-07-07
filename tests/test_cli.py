@@ -143,15 +143,32 @@ def test_analyze_command_exists(monkeypatch) -> None:
             requests_made=3,
         )
 
+    def fake_write_project_map(
+        repository: RepositoryMetadata,
+        scan_result: ScanResult,
+        analysis_result: AnalysisResult,
+        context_result: ContextBuildResult,
+        summary_result: SummaryResult,
+        output_path: Path,
+    ) -> Path:
+        assert repository.owner == "example"
+        assert scan_result.total_files_seen == 3
+        assert len(analysis_result.relationships) == 1
+        assert context_result.total_context_characters == 1234
+        assert summary_result.project_summary.overview == "Mock project summary"
+        assert output_path == Path("custom-map.md")
+        return Path("custom-map.md").resolve()
+
     monkeypatch.setattr("repolens.cli.clone_repository", fake_clone_repository)
     monkeypatch.setattr("repolens.cli.scan_files", fake_scan_files)
     monkeypatch.setattr("repolens.cli.analyze_repository", fake_analyze_repository)
     monkeypatch.setattr("repolens.cli.build_context", fake_build_context)
     monkeypatch.setattr("repolens.cli.summarize_context", fake_summarize_context)
+    monkeypatch.setattr("repolens.cli.write_project_map", fake_write_project_map)
 
     result = runner.invoke(
         app,
-        ["analyze", "https://github.com/example/project"],
+        ["analyze", "https://github.com/example/project", "--output", "custom-map.md"],
     )
 
     assert result.exit_code == 0
@@ -181,4 +198,6 @@ def test_analyze_command_exists(monkeypatch) -> None:
     assert "File summaries generated: 1" in result.stdout
     assert "Module summaries generated: 1" in result.stdout
     assert "Project summary generated: yes" in result.stdout
-    assert "6. Generate PROJECT_MAP.md (placeholder)" in result.stdout
+    assert "6. Generate PROJECT_MAP.md" in result.stdout
+    assert "PROJECT_MAP.md written to:" in result.stdout
+    assert "custom-map.md" in result.stdout

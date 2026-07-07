@@ -111,8 +111,13 @@ def test_analyze_command_exists(monkeypatch) -> None:
             limitations=[],
         )
 
-    def fake_summarize_context(context_result: ContextBuildResult) -> SummaryResult:
+    def fake_summarize_context(
+        context_result: ContextBuildResult,
+        provider=None,
+    ) -> SummaryResult:
         assert context_result.total_context_characters == 1234
+        assert provider is not None
+        assert provider.provider_name == "mock"
         return SummaryResult(
             file_summaries=[
                 FileSummary(
@@ -195,6 +200,7 @@ def test_analyze_command_exists(monkeypatch) -> None:
     assert "Total context characters: 1234" in result.stdout
     assert "Truncated files: 0" in result.stdout
     assert "5. Summarize with LLM" in result.stdout
+    assert "Provider: mock" in result.stdout
     assert "File summaries generated: 1" in result.stdout
     assert "Module summaries generated: 1" in result.stdout
     assert "Project summary generated: yes" in result.stdout

@@ -21,6 +21,9 @@ dependencies = [
 dev = [
     "pytest>=8,<9",
 ]
+openai = [
+    "openai>=1,<2",
+]
 
 [project.scripts]
 repolens = "repolens.cli:app"

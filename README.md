@@ -7,8 +7,8 @@ RepoLens is an open-source, CLI-first repository understanding tool. Give it a p
 ## Current Status
 
 - v0.1 local pipeline works end-to-end for public GitHub repositories.
-- Current summaries use a deterministic Mock LLM provider, so no API key or real LLM network call is required.
-- OpenAI provider support is coming next.
+- Mock LLM is still the default provider, so no API key or real LLM network call is required for safe local testing.
+- OpenAI provider support is available behind `--provider openai`.
 
 ## Quick Start
 
@@ -38,6 +38,12 @@ Install RepoLens with development dependencies:
 python -m pip install -e ".[dev]"
 ```
 
+To use the OpenAI provider, install the optional OpenAI dependency too:
+
+```bash
+python -m pip install -e ".[dev,openai]"
+```
+
 ### Run
 
 Analyze a public GitHub repository:
@@ -60,6 +66,42 @@ RepoLens writes a Markdown report:
 PROJECT_MAP.md
 ```
 
+## LLM Providers
+
+RepoLens defaults to the deterministic Mock provider:
+
+```bash
+repolens analyze https://github.com/owner/repo --provider mock
+```
+
+To use the OpenAI provider, set `OPENAI_API_KEY` first.
+
+On Windows PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY = "your-api-key"
+```
+
+On macOS or Linux:
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+Then run:
+
+```bash
+repolens analyze https://github.com/owner/repo --provider openai
+```
+
+You can choose a model explicitly:
+
+```bash
+repolens analyze https://github.com/owner/repo --provider openai --model gpt-4.1-mini
+```
+
+OpenAI API usage may cost money. Start with a small repository when testing.
+
 ## Example Output
 
 See [examples/PROJECT_MAP.example.md](examples/PROJECT_MAP.example.md) for a realistic sample report based on a small mock repository.
@@ -73,7 +115,7 @@ See [examples/PROJECT_MAP.example.md](examples/PROJECT_MAP.example.md) for a rea
 5. Ranks important files with explainable deterministic rules.
 6. Extracts lightweight Python and JavaScript/TypeScript relationships.
 7. Builds bounded context for summarization.
-8. Uses the current Mock LLM provider to create structured summaries.
+8. Uses the selected LLM provider to create structured summaries.
 9. Generates `PROJECT_MAP.md`.
 
 ## Safety
@@ -90,7 +132,7 @@ See [examples/PROJECT_MAP.example.md](examples/PROJECT_MAP.example.md) for a rea
 - Relationships are not precise call graphs.
 - Inferred data flow is static inference, not runtime tracing.
 - Mock LLM summaries are deterministic placeholders and should be verified against source code.
-- OpenAI-powered summarization is not implemented yet.
+- OpenAI-powered summarization requires `OPENAI_API_KEY` and may produce imperfect summaries.
 
 ## Development
 

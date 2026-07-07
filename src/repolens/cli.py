@@ -1,5 +1,6 @@
 """Command-line interface for RepoLens."""
 
+from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
@@ -9,7 +10,7 @@ from repolens.analyzer import AnalysisResult, analyze_repository
 from repolens.context_builder import ContextBuildResult, build_context
 from repolens.errors import RepoLensError
 from repolens.git_source import clone_repository, validate_github_url
-from repolens.llm import SummaryResult, summarize_context
+from repolens.llm import SummaryResult, create_llm_provider, summarize_context
 from repolens.report import write_project_map
 from repolens.scanner import ScanResult, scan_files
 
@@ -28,6 +29,13 @@ PIPELINE_STAGES = (
     "Summarize with LLM",
     "Generate PROJECT_MAP.md",
 )
+
+
+class ProviderOption(str, Enum):
+    """Supported LLM providers for the CLI."""
+
+    mock = "mock"
+    openai = "openai"
 
 
 @app.callback()
@@ -49,6 +57,20 @@ def analyze(
             help="Path where PROJECT_MAP.md should be written.",
         ),
     ] = Path("PROJECT_MAP.md"),
+    provider: Annotated[
+        ProviderOption,
+        typer.Option(
+            "--provider",
+            help="LLM provider to use for summarization.",
+        ),
+    ] = ProviderOption.mock,
+    model_name: Annotated[
+        str | None,
+        typer.Option(
+            "--model",
+            help="Model name for the selected provider.",
+        ),
+    ] = None,
 ) -> None:
     """Run the first RepoLens pipeline stages for a public GitHub repository."""
     try:
@@ -79,7 +101,15 @@ def analyze(
             _print_context_summary(context_result)
 
             typer.echo(f"5. {PIPELINE_STAGES[4]}")
-            summary_result = summarize_context(context_result)
+            llm_provider = create_llm_provider(
+                provider_name=provider.value,
+                model_name=model_name,
+            )
+            typer.echo(
+                f"  Provider: {llm_provider.provider_name} "
+                f"(model: {llm_provider.model_name})"
+            )
+            summary_result = summarize_context(context_result, provider=llm_provider)
             _print_summary_result(summary_result)
 
             typer.echo(f"6. {PIPELINE_STAGES[5]}")

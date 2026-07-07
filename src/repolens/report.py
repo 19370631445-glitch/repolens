@@ -195,10 +195,15 @@ class ReportComposer:
         return "\n".join(lines)
 
     def _scope_and_limitations(self, inputs: ReportInputs) -> str:
+        provider_label = (
+            "OpenAI LLM summaries"
+            if inputs.summary_result.provider_name == "openai"
+            else "Mock LLM summaries"
+        )
         lines = [
             "## Analysis Scope and Limitations",
             "",
-            "- RepoLens uses lightweight static analysis and Mock LLM summaries in this version.",
+            f"- RepoLens uses lightweight static analysis and {provider_label} in this version.",
             "- Repository code was not executed, imported, built, or tested.",
             "- Skipped secret-like files, binary files, and other excluded files were not read into report context.",
             "- AI-generated summaries may be inaccurate and should be verified against source code.",
@@ -222,7 +227,7 @@ class ReportComposer:
                 f"- LLM provider: `{_safe_inline(inputs.summary_result.provider_name)}`",
                 f"- LLM model: `{_safe_inline(inputs.summary_result.model_name)}`",
                 f"- LLM requests made: {inputs.summary_result.requests_made}",
-                "- OpenAI integration: not used in this run.",
+                f"- OpenAI integration: {_openai_integration_label(inputs.summary_result)}",
             ]
         )
 
@@ -289,3 +294,9 @@ def _safe_inline(value: object) -> str:
 
 def _bullet(value: object) -> str:
     return f"- {_safe_text(value)}"
+
+
+def _openai_integration_label(summary_result: SummaryResult) -> str:
+    if summary_result.provider_name == "openai":
+        return "used in this run."
+    return "not used in this run."

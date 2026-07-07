@@ -1,6 +1,6 @@
 # RepoLens Release Checklist
 
-Use this checklist before publishing a v0.1 release.
+Use this checklist before publishing a RepoLens release.
 
 ## 1. Version and Metadata
 
@@ -35,7 +35,7 @@ Use this checklist before publishing a v0.1 release.
 - [ ] Run RepoLens against a small public GitHub repository:
 
 ```bash
-repolens analyze https://github.com/owner/repo --provider mock
+repolens analyze https://github.com/pallets/markupsafe --provider mock
 ```
 
 - [ ] Confirm `PROJECT_MAP.md` is generated.
@@ -53,7 +53,7 @@ python -m pip install -e ".[dev,openai]"
 - [ ] Run:
 
 ```bash
-repolens analyze https://github.com/owner/repo --provider openai --model gpt-4.1-mini
+repolens analyze https://github.com/pallets/markupsafe --provider openai --model gpt-4.1-mini
 ```
 
 - [ ] Confirm API key is not printed.
@@ -66,7 +66,7 @@ repolens analyze https://github.com/owner/repo --provider openai --model gpt-4.1
 - [ ] Create an annotated tag:
 
 ```bash
-git tag -a v0.1.0 -m "RepoLens v0.1.0"
+git tag -a v0.1.1 -m "RepoLens v0.1.1"
 ```
 
 - [ ] Push commits and tag.

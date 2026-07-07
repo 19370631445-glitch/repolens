@@ -6,9 +6,22 @@ This project follows a lightweight changelog style for the early v0.x phase.
 
 ## Unreleased
 
-- Prepare v0.1 release documentation and GitHub contributor experience.
-- Keep Mock LLM as the default provider for safe local usage and tests.
-- Keep OpenAI provider optional via `--provider openai`.
+- Continue improving first-run clarity, report usefulness, and analysis quality.
+
+## v0.1.1 - Planned
+
+First-impression and trust polish for GitHub visitors.
+
+### Improved
+
+- Replaced placeholder-style sample report text with realistic explanations.
+- Added a `How to Read This Report` section to generated `PROJECT_MAP.md`.
+- Moved `Recommended Reading Order` near the top of generated reports.
+- Improved inferred data-flow wording to use natural hypothesis language.
+- Clarified Mock vs OpenAI provider expectations in the README.
+- Added explicit OpenAI privacy warnings.
+- Split README install instructions into user and contributor paths.
+- Added prerequisites, positioning, badges, and an output preview.
 
 ## v0.1.0 - Planned
 

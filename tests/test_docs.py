@@ -14,6 +14,8 @@ def test_example_project_map_exists_and_is_linked_from_readme() -> None:
     example_text = example_path.read_text(encoding="utf-8")
     required_sections = [
         "## Project Overview",
+        "## How to Read This Report",
+        "## Recommended Reading Order",
         "## Technology Stack",
         "## Important Files",
         "## Lightweight Relationships",
@@ -22,6 +24,9 @@ def test_example_project_map_exists_and_is_linked_from_readme() -> None:
     ]
     for section in required_sections:
         assert section in example_text
+    assert "Mock summary" not in example_text
+    assert "may imports" not in example_text
+    assert "may invokes-likely" not in example_text
 
     readme_text = readme_path.read_text(encoding="utf-8")
     assert "examples/PROJECT_MAP.example.md" in readme_text
@@ -57,6 +62,11 @@ def test_release_polish_documents_exist_and_are_linked() -> None:
     assert "CHANGELOG.md" in readme_text
     assert "examples/PROJECT_MAP.example.md" in readme_text
     assert "Roadmap" in readme_text
+    assert "Who is this for?" in readme_text
+    assert "OpenAI provider sends selected repository snippets to OpenAI" in readme_text
+    assert "Mock provider stays local and does not call OpenAI" in readme_text
+    assert "Python 3.11+" in readme_text
+    assert "Git installed" in readme_text
 
 
 def test_pyproject_release_metadata_is_reasonable() -> None:
@@ -64,7 +74,7 @@ def test_pyproject_release_metadata_is_reasonable() -> None:
     project = pyproject["project"]
 
     assert project["name"] == "repolens"
-    assert project["version"] == "0.1.0"
+    assert project["version"] == "0.1.1"
     assert project["requires-python"] == ">=3.11"
     assert "typer>=0.12,<1" in project["dependencies"]
     assert "pytest>=8,<9" in project["optional-dependencies"]["dev"]

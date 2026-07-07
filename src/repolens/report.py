@@ -7,7 +7,7 @@ from html import escape
 from pathlib import Path
 import tempfile
 
-from repolens.analyzer import AnalysisResult
+from repolens.analyzer import AnalysisResult, Relationship
 from repolens.context_builder import ContextBuildResult, RepositoryMetadata
 from repolens.errors import ReportGenerationError
 from repolens.llm import SummaryResult
@@ -16,7 +16,7 @@ from repolens.scanner import ScanResult
 
 @dataclass(frozen=True)
 class ReportInputs:
-    """All deterministic and mock-summary data needed to render PROJECT_MAP.md."""
+    """All deterministic and summary data needed to render PROJECT_MAP.md."""
 
     repository: RepositoryMetadata
     scan_result: ScanResult
@@ -32,13 +32,14 @@ class ReportComposer:
         sections = [
             "# PROJECT_MAP.md",
             self._project_overview(inputs),
+            self._how_to_read(inputs),
+            self._recommended_reading_order(inputs),
             self._repository_metadata(inputs),
             self._technology_stack(inputs),
             self._file_inventory(inputs),
             self._important_files(inputs),
             self._relationships(inputs),
             self._inferred_data_flow(inputs),
-            self._recommended_reading_order(inputs),
             self._scope_and_limitations(inputs),
             self._generated_by(inputs),
         ]
@@ -56,6 +57,35 @@ class ReportComposer:
         if project_summary.evidence_paths:
             lines.extend(["", "Evidence paths:"])
             lines.extend(_bullet(path) for path in sorted(project_summary.evidence_paths))
+        return "\n".join(lines)
+
+    def _how_to_read(self, inputs: ReportInputs) -> str:
+        lines = [
+            "## How to Read This Report",
+            "",
+            "1. Start with **Project Overview** for the high-level purpose.",
+            "2. Read **Recommended Reading Order** to decide where to begin in the code.",
+            "3. Inspect **Important Files** for file-level responsibilities and evidence paths.",
+            "4. Treat **Inferred Data Flow** as a hypothesis to verify against source code.",
+        ]
+        if inputs.analysis_result.ranked_files:
+            lines.extend(["", "Reading-order preview:"])
+            for ranked_file in inputs.analysis_result.ranked_files[:3]:
+                reasons = "; ".join(_safe_text(reason) for reason in ranked_file.reasons)
+                lines.append(f"- `{_safe_inline(ranked_file.path)}` - {reasons}")
+        return "\n".join(lines)
+
+    def _recommended_reading_order(self, inputs: ReportInputs) -> str:
+        lines = ["## Recommended Reading Order", ""]
+        if not inputs.analysis_result.ranked_files:
+            lines.append("No ranked files were available.")
+            return "\n".join(lines)
+
+        for index, ranked_file in enumerate(inputs.analysis_result.ranked_files[:10], start=1):
+            reasons = "; ".join(_safe_text(reason) for reason in ranked_file.reasons)
+            lines.append(
+                f"{index}. `{_safe_inline(ranked_file.path)}` - score {ranked_file.score}. {reasons}"
+            )
         return "\n".join(lines)
 
     def _repository_metadata(self, inputs: ReportInputs) -> str:
@@ -86,8 +116,8 @@ class ReportComposer:
             evidence = ", ".join(f"`{_safe_inline(path)}`" for path in finding.evidence_paths)
             lines.append(
                 f"- **{_safe_text(finding.name)}** "
-                f"({ _safe_text(finding.category) }, confidence: `{_safe_inline(finding.confidence)}`) "
-                f"— {_safe_text(finding.reason)} Evidence: {evidence}"
+                f"({_safe_text(finding.category)}, confidence: `{_safe_inline(finding.confidence)}`) "
+                f"- {_safe_text(finding.reason)} Evidence: {evidence}"
             )
         return "\n".join(lines)
 
@@ -103,7 +133,7 @@ class ReportComposer:
         lines.extend(["", "Included files:"])
         for file in sorted(scan.included_files, key=lambda item: item.path)[:100]:
             lines.append(
-                f"- `{_safe_inline(file.path)}` — {_safe_text(file.language)}, "
+                f"- `{_safe_inline(file.path)}` - {_safe_text(file.language)}, "
                 f"{file.size_bytes} bytes, analysis mode: `{_safe_inline(file.analysis_mode)}`"
             )
 
@@ -153,9 +183,9 @@ class ReportComposer:
 
         for relationship in inputs.analysis_result.relationships:
             lines.append(
-                f"- `{_safe_inline(relationship.source_path)}` → `{_safe_inline(relationship.target)}` "
-                f"({ _safe_text(relationship.relationship_type) }, "
-                f"confidence: `{_safe_inline(relationship.confidence)}`) — "
+                f"- `{_safe_inline(relationship.source_path)}` -> `{_safe_inline(relationship.target)}` "
+                f"({_safe_text(relationship.relationship_type)}, "
+                f"confidence: `{_safe_inline(relationship.confidence)}`) - "
                 f"{_safe_text(relationship.reason)} Evidence: `{_safe_inline(relationship.evidence)}`"
             )
         return "\n".join(lines)
@@ -164,7 +194,7 @@ class ReportComposer:
         lines = [
             "## Inferred Data Flow",
             "",
-            "**Inference notice:** This section is inferred from static file relationships and mock summaries. "
+            "**Inference notice:** This section is inferred from static file relationships and summaries. "
             "It is not a runtime trace, precise call graph, or verified execution path.",
             "",
         ]
@@ -173,25 +203,7 @@ class ReportComposer:
             lines.append("No inferred data-flow hints were available.")
             return "\n".join(lines)
 
-        for relationship in relationships[:20]:
-            lines.append(
-                f"- Inferred: `{_safe_inline(relationship.source_path)}` may "
-                f"{_safe_text(relationship.relationship_type)} `{_safe_inline(relationship.target)}` "
-                f"(confidence: `{_safe_inline(relationship.confidence)}`)."
-            )
-        return "\n".join(lines)
-
-    def _recommended_reading_order(self, inputs: ReportInputs) -> str:
-        lines = ["## Recommended Reading Order", ""]
-        if not inputs.analysis_result.ranked_files:
-            lines.append("No ranked files were available.")
-            return "\n".join(lines)
-
-        for index, ranked_file in enumerate(inputs.analysis_result.ranked_files[:10], start=1):
-            reasons = "; ".join(_safe_text(reason) for reason in ranked_file.reasons)
-            lines.append(
-                f"{index}. `{_safe_inline(ranked_file.path)}` — score {ranked_file.score}. {reasons}"
-            )
+        lines.extend(_inferred_relationship_sentence(relationship) for relationship in relationships[:20])
         return "\n".join(lines)
 
     def _scope_and_limitations(self, inputs: ReportInputs) -> str:
@@ -300,3 +312,23 @@ def _openai_integration_label(summary_result: SummaryResult) -> str:
     if summary_result.provider_name == "openai":
         return "used in this run."
     return "not used in this run."
+
+
+def _inferred_relationship_sentence(relationship: Relationship) -> str:
+    source = f"`{_safe_inline(relationship.source_path)}`"
+    target = f"`{_safe_inline(relationship.target)}`"
+    relationship_type = str(relationship.relationship_type)
+    confidence = f"confidence: `{_safe_inline(relationship.confidence)}`"
+
+    if relationship_type == "imports":
+        sentence = f"{source} likely imports or references {target}"
+    elif relationship_type == "invokes-likely":
+        sentence = f"{source} may invoke or start {target}"
+    elif relationship_type == "configures":
+        sentence = f"{source} appears to configure {target}"
+    elif relationship_type == "references":
+        sentence = f"{source} references {target}"
+    else:
+        sentence = f"{source} is related to {target} via `{_safe_inline(relationship_type)}`"
+
+    return f"- Inferred: {sentence} ({confidence})."

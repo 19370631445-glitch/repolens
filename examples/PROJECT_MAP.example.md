@@ -1,17 +1,40 @@
 # PROJECT_MAP.md
 
-> Sample output generated for a small mock repository. This file is included as an example of RepoLens report structure; it is not the result of analyzing a real production project.
+> Sample output for a fictional small repository: `example/tiny-api`.
+> This file is included to show what RepoLens reports look like. It is not the result of analyzing a real production project.
 
 ## Project Overview
 
-Mock summary for project_summary. Source: example/tiny-api. Evidence paths: README.md, src/app.py, src/routes.py.
+`tiny-api` appears to be a small FastAPI service with one application entry point, a route module, Python dependency metadata, and a Dockerfile for container startup. A developer should begin with `src/app.py` to understand how the app is created, then read `src/routes.py` to see the HTTP endpoints.
 
 > AI-generated summaries may be inaccurate. Verify important conclusions against the source code.
 
 Evidence paths:
 - README.md
+- pyproject.toml
 - src/app.py
 - src/routes.py
+- Dockerfile
+
+## How to Read This Report
+
+1. Start with **Project Overview** for the high-level purpose.
+2. Read **Recommended Reading Order** to decide where to begin in the code.
+3. Inspect **Important Files** for file-level responsibilities and evidence paths.
+4. Treat **Inferred Data Flow** as a hypothesis to verify against source code.
+
+Reading-order preview:
+- `src/app.py` - common application entry point; source file under src/ or app/
+- `README.md` - README/documentation overview
+- `pyproject.toml` - manifest or configuration file
+
+## Recommended Reading Order
+
+1. `src/app.py` - score 125. Common application entry point; source file under src/ or app/.
+2. `README.md` - score 100. Project overview and usage notes.
+3. `pyproject.toml` - score 85. Dependency and tooling metadata.
+4. `src/routes.py` - score 45. Route definitions used by the app.
+5. `Dockerfile` - score 40. Container startup behavior.
 
 ## Repository Metadata
 
@@ -25,10 +48,10 @@ Evidence paths:
 
 ## Technology Stack
 
-- **Python** (language, confidence: `high`) — Python packaging or dependency files are present. Evidence: `pyproject.toml`, `requirements.txt`
-- **FastAPI** (framework, confidence: `high`) — FastAPI appears in Python dependency configuration. Evidence: `pyproject.toml`
-- **pytest config** (testing, confidence: `high`) — pytest configuration file is present. Evidence: `pyproject.toml`
-- **Docker** (container, confidence: `high`) — Dockerfile is present. Evidence: `Dockerfile`
+- **Python** (language, confidence: `high`) - Python packaging or dependency files are present. Evidence: `pyproject.toml`, `requirements.txt`
+- **FastAPI** (framework, confidence: `high`) - FastAPI appears in Python dependency configuration. Evidence: `pyproject.toml`
+- **pytest config** (testing, confidence: `high`) - pytest configuration appears in project metadata. Evidence: `pyproject.toml`
+- **Docker** (container, confidence: `high`) - A Dockerfile is present. Evidence: `Dockerfile`
 
 ## Directory / File Inventory
 
@@ -39,11 +62,11 @@ Language counts:
 - TOML: 1
 
 Included files:
-- `Dockerfile` — Dockerfile, 72 bytes, analysis mode: `source`
-- `README.md` — Markdown, 128 bytes, analysis mode: `source`
-- `pyproject.toml` — TOML, 240 bytes, analysis mode: `source`
-- `src/app.py` — Python, 180 bytes, analysis mode: `source`
-- `src/routes.py` — Python, 260 bytes, analysis mode: `source`
+- `Dockerfile` - Dockerfile, 72 bytes, analysis mode: `source`
+- `README.md` - Markdown, 128 bytes, analysis mode: `source`
+- `pyproject.toml` - TOML, 240 bytes, analysis mode: `source`
+- `src/app.py` - Python, 180 bytes, analysis mode: `source`
+- `src/routes.py` - Python, 260 bytes, analysis mode: `source`
 
 Skipped file reason counts:
 - `secret_or_environment_file`: 1
@@ -51,62 +74,63 @@ Skipped file reason counts:
 
 ## Important Files
 
+### `src/app.py`, score: 125
+
+Creates the FastAPI application and connects the route module to the app. This is likely the best first file to read because it shows how the service starts and which routes are registered.
+
+Ranking reasons:
+- common application entry point
+- source file under src/ or app/
+
 ### `README.md`, score: 100
 
-Mock summary for file_summary. Source: README.md. Evidence paths: README.md.
+Provides the human-facing project overview. For a real repository, this is where setup instructions, usage examples, and project goals are most likely to appear.
 
 Ranking reasons:
 - README/documentation overview
 
 ### `pyproject.toml`, score: 85
 
-Mock summary for file_summary. Source: pyproject.toml. Evidence paths: pyproject.toml.
+Defines project metadata, Python dependencies, and tool configuration. It is the main evidence source for FastAPI, pytest, and other Python tooling.
 
 Ranking reasons:
 - manifest or configuration file
 
-### `src/app.py`, score: 125
+### `src/routes.py`, score: 45
 
-Mock summary for file_summary. Source: src/app.py. Evidence paths: src/app.py.
+Likely contains HTTP route definitions imported by the FastAPI application. Read this after `src/app.py` to understand what endpoints the service exposes.
 
 Ranking reasons:
-- common application entry point
 - source file under src/ or app/
 
 ## Lightweight Relationships
 
-- `src/app.py` → `src/routes.py` (imports, confidence: `high`) — Python import statement. Evidence: `from src.routes import router`
-- `Dockerfile` → `src/app.py` (invokes-likely, confidence: `low`) — Dockerfile command appears to invoke a repository file. Evidence: `CMD python src/app.py`
+- `src/app.py` -> `src/routes.py` (imports, confidence: `high`) - Python import statement. Evidence: `from src.routes import router`
+- `Dockerfile` -> `src/app.py` (invokes-likely, confidence: `low`) - Dockerfile command appears to invoke a repository file. Evidence: `CMD python src/app.py`
 
 ## Inferred Data Flow
 
-**Inference notice:** This section is inferred from static file relationships and mock summaries. It is not a runtime trace, precise call graph, or verified execution path.
+**Inference notice:** This section is inferred from static file relationships and summaries. It is not a runtime trace, precise call graph, or verified execution path.
 
-- Inferred: `src/app.py` may imports `src/routes.py` (confidence: `high`).
-- Inferred: `Dockerfile` may invokes-likely `src/app.py` (confidence: `low`).
-
-## Recommended Reading Order
-
-1. `src/app.py` — score 125. common application entry point; source file under src/ or app/
-2. `README.md` — score 100. README/documentation overview
-3. `pyproject.toml` — score 85. manifest or configuration file
-4. `src/routes.py` — score 45. source file under src/ or app/
+- Inferred: `src/app.py` likely imports routing definitions from `src/routes.py` (confidence: `high`).
+- Inferred: `Dockerfile` may start the app through `src/app.py` (confidence: `low`).
 
 ## Analysis Scope and Limitations
 
-- RepoLens uses lightweight static analysis and Mock LLM summaries in this version.
+- RepoLens uses lightweight static analysis and sample summaries in this example.
 - Repository code was not executed, imported, built, or tested.
 - Skipped secret-like files, binary files, and other excluded files were not read into report context.
 - AI-generated summaries may be inaccurate and should be verified against source code.
 
 Recorded limitations:
-- Example report uses mock repository data.
+- Example report uses fictional mock repository data.
 - Relationships are lightweight static inferences, not precise call graphs.
+- Inferred data flow is a reading aid, not a verified runtime trace.
 
 ## Generated By RepoLens
 
 - Tool: RepoLens
-- LLM provider: `mock`
-- LLM model: `mock-deterministic-v0`
-- LLM requests made: 5
-- OpenAI integration: not used in this run.
+- LLM provider: `sample`
+- LLM model: `sample-output`
+- LLM requests made: 0
+- OpenAI integration: not used in this sample.

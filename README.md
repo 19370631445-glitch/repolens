@@ -1,28 +1,18 @@
 # RepoLens
 
-RepoLens is an early-stage, open-source CLI for understanding unfamiliar code repositories.
+Understand unfamiliar GitHub repositories in minutes with an AI-assisted PROJECT_MAP.md.
 
-The approved v0.1 direction is a bounded pipeline that will eventually analyze a public GitHub repository and generate a `PROJECT_MAP.md`. This initial skeleton does not clone repositories or call an LLM yet.
+RepoLens is an open-source, CLI-first repository understanding tool. Give it a public GitHub repository URL and it builds a local, traceable `PROJECT_MAP.md` using safe static analysis, lightweight relationship extraction, bounded context building, and the current Mock LLM summarization pipeline.
 
-## Current status
+## Current Status
 
-The placeholder command prints the planned pipeline:
+- v0.1 local pipeline works end-to-end for public GitHub repositories.
+- Current summaries use a deterministic Mock LLM provider, so no API key or real LLM network call is required.
+- OpenAI provider support is coming next.
 
-1. Validate GitHub URL
-2. Clone repository
-3. Scan files
-4. Analyze structure
-5. Summarize with LLM
-6. Generate PROJECT_MAP.md
+## Quick Start
 
-No target repository code is downloaded or executed in this version.
-
-## Requirements
-
-- Python 3.11 or newer
-- `pip`
-
-## Local installation
+### Install
 
 Create and activate a virtual environment:
 
@@ -42,35 +32,86 @@ On macOS or Linux:
 source .venv/bin/activate
 ```
 
-Install RepoLens and its test dependency:
+Install RepoLens with development dependencies:
 
 ```bash
 python -m pip install -e ".[dev]"
 ```
 
-## Usage
+### Run
 
-Run the placeholder CLI with a public GitHub URL:
+Analyze a public GitHub repository:
 
 ```bash
-repolens analyze https://github.com/example/project
+repolens analyze https://github.com/owner/repo
 ```
 
-The command currently prints stages only. Real URL validation, cloning, scanning, analysis, LLM calls, and report generation are deliberately left for later milestones.
+Optionally choose the report path:
 
-## Tests
+```bash
+repolens analyze https://github.com/owner/repo --output PROJECT_MAP.md
+```
+
+### Output
+
+RepoLens writes a Markdown report:
+
+```text
+PROJECT_MAP.md
+```
+
+## Example Output
+
+See [examples/PROJECT_MAP.example.md](examples/PROJECT_MAP.example.md) for a realistic sample report based on a small mock repository.
+
+## What RepoLens Does
+
+1. Validates a public GitHub HTTPS repository URL.
+2. Performs a shallow clone into a temporary workspace.
+3. Scans files with safe filters and conservative resource limits.
+4. Detects technologies from manifest and config evidence.
+5. Ranks important files with explainable deterministic rules.
+6. Extracts lightweight Python and JavaScript/TypeScript relationships.
+7. Builds bounded context for summarization.
+8. Uses the current Mock LLM provider to create structured summaries.
+9. Generates `PROJECT_MAP.md`.
+
+## Safety
+
+- RepoLens does not execute target repository code.
+- RepoLens does not import target repository modules.
+- RepoLens skips common secrets, private keys, `.env` files, binary/media files, generated folders, and dependency folders.
+- Repository content is treated as untrusted data and wrapped with explicit delimiters before summarization.
+- Generated reports include limitations and inference labels.
+
+## Limitations
+
+- RepoLens uses lightweight heuristics, not a full AST engine.
+- Relationships are not precise call graphs.
+- Inferred data flow is static inference, not runtime tracing.
+- Mock LLM summaries are deterministic placeholders and should be verified against source code.
+- OpenAI-powered summarization is not implemented yet.
+
+## Development
+
+Run tests:
 
 ```bash
 python -m pytest
 ```
 
-## Project documents
+Pytest uses a project-local temp directory:
 
-- `PRD.md` — product scope and requirements
-- `TECH_DESIGN.md` — approved architecture and security boundaries
-- `ROADMAP.md` — v0.1 milestones and future direction
+```text
+.tmp/pytest
+```
+
+## Project Documents
+
+- `PRD.md`
+- `TECH_DESIGN.md`
+- `ROADMAP.md`
 
 ## License
 
 MIT
-
